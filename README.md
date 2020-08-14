@@ -12,6 +12,10 @@ NOTE : actual pickled datasets are not uploaded to repository! use README.md to 
 
 ## Global Model
 
+Global Model Architecture :
+
+![global model Architecture](./res/global_model_architecture.png)
+
 Global Model has achived a accuracy of 97.3 %
 
 Plot of Accuracy and Loss over epoch :
