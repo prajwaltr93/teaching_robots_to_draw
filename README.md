@@ -31,7 +31,7 @@ Saved Model can be found ./saved_models/global_model
 
 07/08/2020
 
-- [ ] train local model
+- [x] train local model
 
 - [ ] generate learning curves for local model
 
@@ -44,3 +44,9 @@ Saved Model can be found ./saved_models/global_model
 - [x] train global model
 
 - [ ] add vaidation and test datasets and respective loss
+
+28/08/2020
+
+- [ ] train on local model on google colab
+
+- [ ] complete final python script and finish project 
