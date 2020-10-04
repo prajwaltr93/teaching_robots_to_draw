@@ -77,8 +77,10 @@ if __name__ == "__main__":
     thresh = cv.THRESH_BINARY_INV
     img = cv.imread('./res/handwritten_A_cropped.png') # 2 - RBG -> GRAYSCALE
     img = cv.resize(img, (100, 100), cv.INTER_CUBIC)
+    # blur image to reduce noise
     img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-    _,img = cv.threshold(img, 160, 255, thresh)
+    img = cv.GaussianBlur(img,(3,3),0) # 1 * 1 kernel
+    _,img = cv.threshold(img, 0, 255, thresh + cv.THRESH_OTSU)
     img[np.where(img > 0)] = 1
     img = skeletonize(img, method='lee')
     plt.imshow(img, cmap = "Greys_r")
