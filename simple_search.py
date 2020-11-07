@@ -9,6 +9,7 @@
 '''
 # imports
 import copy as cp
+import numpy as np
 
 stack = []
 visited = {}
@@ -51,8 +52,8 @@ def simpleSearch(start, img, size):
 
     connected_points = []
 
-    visited[start.__repr__()] = PROCESSING
-    stack.append(start)
+    visited[list(start).__repr__()] = PROCESSING
+    stack.append(list(start))
 
     # DFS search the image for connected strokes
     while(len(stack) != 0):
@@ -71,21 +72,20 @@ def simpleSearch(start, img, size):
 # test working of algorithm
 if __name__ == "__main__":
     import cv2 as cv
-    import numpy as np
     from skimage.morphology import skeletonize
     import matplotlib.pyplot as plt
     thresh = cv.THRESH_BINARY_INV
-    img = cv.imread('./res/handwritten_A_cropped.png') # 2 - RBG -> GRAYSCALE
+    img = cv.imread('./res/japanese.png') # 2 - RBG -> GRAYSCALE
     img = cv.resize(img, (100, 100), cv.INTER_CUBIC)
     # blur image to reduce noise
     img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-    img = cv.GaussianBlur(img,(3,3),0) # 1 * 1 kernel
-    _,img = cv.threshold(img, 0, 255, thresh + cv.THRESH_OTSU)
+    # img = cv.GaussianBlur(img,(3,3),0) # 1 * 1 kernel
+    _, img = cv.threshold(img, 160, 255, thresh)
     img[np.where(img > 0)] = 1
     img = skeletonize(img, method='lee')
     plt.imshow(img, cmap = "Greys_r")
     plt.show()
-    start = (33,55) # this is given global model during run time
+    start = (45, 9) # this is given by global model during run time
     points = simpleSearch(list(start), img, img.shape[0])
     draw_img = np.zeros(img.shape)
     # mark points obtained by search algorithm, which are connected
