@@ -28,11 +28,11 @@ local_model = getLocalModel()
 local_step_plt_path = "./test_dir/local_steps/"
 res_file = "test_dir/kanji_samples/0f9af.svg"
 # thresh value to flip pixels
-thresh_val = 148
+thresh_val = 137
 # counter to save plots of local model
 counter = 0
 # thresh value of touch to decide control transfer beteen local and global model
-touch_thresh = 0.4
+touch_thresh = 0.0
 # temp canvas
 temp_canvas = np.zeros((HEIGHT, WIDTH))
 
@@ -86,13 +86,14 @@ def prepImage(file, flag):
             renderPM.drawToFile(drawing, file.split(".")[0] + ".png", fmt="PNG")
         print(file.split(".")[0] + ".png")
         img = cv.imread(file.split(".")[0] + ".png")
+        img = cv.resize(img, (100, 100), cv.INTER_CUBIC)
         # load generated image and apply image transformations
         thresh = cv.THRESH_BINARY_INV
         # img = cv.imread('./res/japanese.png') # 2 - RBG -> GRAYSCALE
         img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         _, img = cv.threshold(img, thresh_val, 255, thresh)
         img[np.where(img > 0)] = 1 # convert to image with 0's and 1's ex : binary image
-        img = skeletonize(img, method='lee') # convert width of stroke to one pixel wide
+        img = skeletonize(img) # convert width of stroke to one pixel wide
 
     plt.imshow(img)
     plt.show()
@@ -103,18 +104,14 @@ def updateCanvas(env_img, diff_img, con_img, ext_inp, touch, next_xy_grid):
         save each instances/steps taken by local model in plots
     '''
     global counter, temp_canvas
-    _, axs = plt.subplots(1, 5)
+    _, axs = plt.subplots(1, 3)
     axs[0].imshow(env_img, cmap="Greys_r")
     axs[1].imshow(diff_img, cmap="Greys_r")
-    axs[2].imshow(con_img, cmap="Greys_r")
-    axs[3].imshow(np.reshape(next_xy_grid, (5, 5)), cmap="Greys_r")
-    axs[4].imshow(temp_canvas, cmap="Greys_r")
+    axs[2].imshow(temp_canvas, cmap="Greys_r")
     # update legend
     axs[0].set_title("env_img")
     axs[1].set_title("diff_img")
-    axs[2].set_title("con_img")
-    axs[3].set_title("cropped_img")
-    axs[4].set_title("actual outputs")
+    axs[2].set_title("actual outputs")
     plt.savefig(local_step_plt_path + "local step : " + counter.__str__() + ".png")
     plt.close()
     counter += 1
@@ -123,7 +120,7 @@ def local_model_predict(current_xy, connected_points, env_img, diff_img, con_img
     '''
         recursive function which predicts local actions
     '''
-    if len(connected_points) == 1:
+    if len(connected_points) == 0:
         print("INFO : TESTING ENDS")
         return # testing ends
     touch, next_xy_grid = local_model.predict(prepInput([env_img, diff_img, con_img, current_xy]))
@@ -136,16 +133,22 @@ def local_model_predict(current_xy, connected_points, env_img, diff_img, con_img
         if list(next_xy) in connected_points:
             print('SUCCESS : POINT PREDICTED')
             print("INFO : PREDICTION MADE : ", next_xy)
+            temp_canvas[next_xy[1], next_xy[0]] = 1
         else:
             print("FAILED : POINT PREDICTED")
             print("INFO : PREDICTION MADE : ", next_xy)
             temp_canvas[next_xy[1], next_xy[0]] = 1
-            # help local model for next_xy
-            next_xy = connected_points[1]
+            try:
+                # help local model for next_xy
+                next_xy = connected_points[1]
+            except:
+                next_xy = connected_points[0]
+
         stroke = connected_points[0 : connected_points.index(list(next_xy))+1]
         for ind in range(len(stroke) - 1):
             cv.line(env_img,tuple(stroke[ind]), tuple(stroke[ind+1]), 1, 1, cv.LINE_AA) # write
-            cv.line(diff_img,tuple(stroke[ind]), tuple(stroke[ind+1]), 0, 1, cv.LINE_AA) # erase
+        for point in stroke:
+            diff_img[point[1], point[0]] = 0
         # update remaining connected points
         connected_points = connected_points[connected_points.index(list(next_xy)) + 1 : ]
         local_model_predict(next_xy, connected_points, env_img, diff_img, con_img)
