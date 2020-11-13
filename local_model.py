@@ -14,6 +14,8 @@ tf.compat.v1.disable_eager_execution()
 tf.compat.v1.experimental.output_all_intermediates(True)
 
 weights_path = "./weights/local_model_weights/local_model_trained_1"
+inp_img_dim = [100, 100, 3]
+inp_ext_dim = [3]
 
 # build , intiliaze with trained weights and return model for inference
 def getLocalModel():
@@ -88,9 +90,9 @@ def getLocalModel():
     x_a = res_block_32(x_a)
     x_a = res_block_64(x_a)
 
-    # now x is 95 * 65 * 54 res encoded tensor, now carry out extraction procedure to enforce localization
+    # now x is 100 * 100 * 64 res encoded tensor, now carry out extraction procedure to enforce localization
     # batch_size is Dynamic, Unknown or of type None, hence using map_fn to iterate over dimention '0' --> None
-    extracted_tensor = tf.map_fn(slice_return, elems = (x_a, ext_inp), fn_output_signature=tf.float32)
+    extracted_tensor = tf.map_fn(slice_return, elems = (x_a, ext_inp), dtype=tf.float32)
     x_0 = Flatten()(extracted_tensor) #flatten and feed to dense layer
     #fully connected layer 1
     # x1 = Dense(256, activation='relu')(x_0)
