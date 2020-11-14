@@ -26,7 +26,7 @@ from drawing_utils import getStrokesIndices, parsePointString, drawStroke, highl
 # globals and Constants
 local_model = getLocalModel()
 local_step_plt_path = "./test_dir/local_steps/"
-res_file = "test_dir/kanji_samples/0f9af.svg"
+res_file = "test_dir/kanji_samples/0f9b4.svg"
 # thresh value to flip pixels
 thresh_val = 137
 # counter to save plots of local model
@@ -71,7 +71,6 @@ def prepImage(file, flag):
     from os import path
     if flag:
         print("INFO : TARGET IMAGE FROM SVG")
-        from os import path
         X_target, m_indices = getStrokesIndices(open(file, 'r').read())
         img = drawStroke(X_target)
     else:
@@ -93,8 +92,7 @@ def prepImage(file, flag):
         img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         _, img = cv.threshold(img, thresh_val, 255, thresh)
         img[np.where(img > 0)] = 1 # convert to image with 0's and 1's ex : binary image
-        img = skeletonize(img) # convert width of stroke to one pixel wide
-
+        img = skeletonize(img, method='lee') # convert width of stroke to one pixel wide
     plt.imshow(img)
     plt.show()
     return img
@@ -159,9 +157,11 @@ def local_model_predict(current_xy, connected_points, env_img, diff_img, con_img
 # test local model
 if __name__ == "__main__":
     file = res_file
+    stroke = 1 # nth stroke
     global_model_predict = pseudoGlobalModelGenerator(file)
     skel_img = prepImage(file, 0)
-    start = next(global_model_predict) # starting point for local model
+    for i in range(stroke):
+        start = next(global_model_predict) # starting point for local model
     # X_target, start
     connected_points = simpleSearch(start, skel_img, WIDTH)
     if len(connected_points) == 1:
