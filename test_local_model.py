@@ -40,14 +40,16 @@ temp_canvas = np.zeros((HEIGHT, WIDTH))
 def get2DCordinates(index):
     # width and height of cropped image
     crop_hw = 5
-    # returns plt cordinates y, x
+    # returns plt cordinates x, y from col, row ex: x --> row  and y --> col
     return (index%crop_hw, index//crop_hw)
 
 def getNextCordinates(current_xy, next_xy):
-    delta = [next_xy[1] - 1, next_xy[0] - 1]
-    return (current_xy[0] + delta[1], current_xy[1] + delta[0])
+    # convert to actual cordinates
+    delta = [next_xy[0] - 1, next_xy[1] - 1]
+    return (current_xy[0] + delta[0], current_xy[1] + delta[1])
 
 def prepInput(inpts):
+    # make inputs suitable to be taken as input to model
     return [np.expand_dims(np.dstack((inpts[0], inpts[1], inpts[2])), axis=0), np.expand_dims(np.array(list(inpts[3][::-1]) + [0]), axis=0)] # [x1, x2]
 
 # pseudo global model output generator
@@ -102,14 +104,18 @@ def updateCanvas(env_img, diff_img, con_img, ext_inp, touch, next_xy_grid):
         save each instances/steps taken by local model in plots
     '''
     global counter, temp_canvas
-    _, axs = plt.subplots(1, 3)
+    _, axs = plt.subplots(1, 5)
     axs[0].imshow(env_img, cmap="Greys_r")
     axs[1].imshow(diff_img, cmap="Greys_r")
     axs[2].imshow(temp_canvas, cmap="Greys_r")
+    axs[3].imshow(con_img, cmap="Greys_r")
+    axs[4].imshow(np.reshape(next_xy_grid, (5, 5)), cmap="Greys_r")
     # update legend
     axs[0].set_title("env_img")
     axs[1].set_title("diff_img")
-    axs[2].set_title("actual outputs")
+    axs[2].set_title("actual output")
+    axs[3].set_title("connected stroke")
+    axs[4].set_title("next xy")
     plt.savefig(local_step_plt_path + "local step : " + counter.__str__() + ".png")
     plt.close()
     counter += 1
@@ -118,42 +124,41 @@ def local_model_predict(current_xy, connected_points, env_img, diff_img, con_img
     '''
         recursive function which predicts local actions
     '''
-    if len(connected_points) == 0:
-        print("INFO : TESTING ENDS")
-        return # testing ends
     touch, next_xy_grid = local_model.predict(prepInput([env_img, diff_img, con_img, current_xy]))
     updateCanvas(env_img, diff_img, con_img, current_xy, touch, next_xy_grid)
-    print("touch = ", touch)
-    if touch >= touch_thresh:
+    if touch[0] >= touch_thresh: # pass control to local model
+        if len(connected_points) ==  0:
+            # miss predicted touch value
+            print("FAILED :  TOUCH PREDICTED")
+            print("INFO : PREDICTION MADE : ", touch)
+            print("INFO : TESTING ENDS")
+            return # testing ends
         # get 2d cordinates of 1d array
         next_xy = get2DCordinates(np.argmax(next_xy_grid))
         next_xy = getNextCordinates(current_xy, next_xy)
         if list(next_xy) in connected_points:
             print('SUCCESS : POINT PREDICTED')
             print("INFO : PREDICTION MADE : ", next_xy)
-            temp_canvas[next_xy[1], next_xy[0]] = 1
+            cv.line(temp_canvas,tuple(current_xy), tuple(next_xy), 1, 1, cv.LINE_AA) # update temp_canvas -> all local model predictions
+            h_next_xy = next_xy
         else:
             print("FAILED : POINT PREDICTED")
             print("INFO : PREDICTION MADE : ", next_xy)
-            temp_canvas[next_xy[1], next_xy[0]] = 1
+            cv.line(temp_canvas,tuple(current_xy), tuple(next_xy), 1, 1, cv.LINE_AA) # update temp_canvas -> all local model predictions
             try:
                 # help local model for next_xy
-                next_xy = connected_points[1]
+                h_next_xy = connected_points[1]
             except:
-                next_xy = connected_points[0]
-
-        stroke = connected_points[0 : connected_points.index(list(next_xy))+1]
-        for ind in range(len(stroke) - 1):
-            cv.line(env_img,tuple(stroke[ind]), tuple(stroke[ind+1]), 1, 1, cv.LINE_AA) # write
+                h_next_xy = connected_points[0]
+        # update env, diff images
+        stroke = connected_points[0 : connected_points.index(list(h_next_xy))+1]
         for point in stroke:
-            diff_img[point[1], point[0]] = 0
-        # update remaining connected points
-        connected_points = connected_points[connected_points.index(list(next_xy)) + 1 : ]
-        local_model_predict(next_xy, connected_points, env_img, diff_img, con_img)
-    else:
-        # touch < 0.3 pass control to global model
-        pass # TODO : IMPLEMENT FULL CYCLE
+            env_img[point[1], point[0]] = 1 # write
+            diff_img[point[1], point[0]] = 0 # erase
 
+        # update remaining connected points
+        connected_points = connected_points[connected_points.index(list(h_next_xy)) + 1 : ]
+        local_model_predict(next_xy, connected_points, env_img, diff_img, con_img)
 # test local model
 if __name__ == "__main__":
     file = res_file
