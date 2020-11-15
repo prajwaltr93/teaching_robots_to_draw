@@ -4,7 +4,9 @@ Implementation of paper Teaching Robots to Draw by Atsunobu Kotani and Stefanie 
 
 ## Local Model
 
-local model accuracy : 96.4%
+cropped next_xy accuracy : 96.4%
+
+touch accuracy : 99.0%
 
 local model architecture:
 
@@ -13,6 +15,17 @@ local model architecture:
 training plot :
 
 ![local model training plot](./res/local_model_training.png)
+
+feature histogram for local dataset looks like this :
+
+![feature map](./res/localdatasetfeature_map.png)
+
+classes are heavily skewed, so accuracy might not be the best metric to analyse local model performance.
+20 characters were choosen from dataset, and recall scores for each class were calculated:
+
+![recall scores](./res/recall_local_model.png)
+
+except for class 2 and 13, every other class seems to be generalising well.
 
 ## Global Model
 
@@ -50,4 +63,4 @@ derprecated dataset:
 
 - [ ] train global model
 
-- [ ] add legend to training local plot 
+- [ ] add legend to training local plot
