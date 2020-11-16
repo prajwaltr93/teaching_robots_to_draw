@@ -27,6 +27,10 @@ classes are heavily skewed, so accuracy might not be the best metric to analyse 
 
 except for class 2 and 13, every other class seems to be generalising well.
 
+### local model in action !
+
+![local model in action](./res/local_model_inaction.gif)
+
 ## Global Model
 
 yet to train
