@@ -124,7 +124,10 @@ def updateCanvas(env_img, diff_img, con_img, next_xy_grid):
 def local_model_predict(slice_begin, connected_points, env_img, diff_img, con_img):
     touch_pred, next_xy_pred = local_model.predict(prepInput([env_img, diff_img, con_img, slice_begin]))
     updateCanvas(env_img, diff_img, con_img, next_xy_pred)
+    print(touch_pred)
     if touch_pred[0] >= touch_thresh:
+        if len(connected_points) == 0:
+            return
         next_xy = get2DCordinates(np.argmax(next_xy_pred))
         next_xy = getNextCordinates(slice_begin, next_xy)
         if list(next_xy) in connected_points:
@@ -153,15 +156,15 @@ def local_model_predict(slice_begin, connected_points, env_img, diff_img, con_im
         local_model_predict(slice_begin, connected_points, env_img, diff_img, con_img)
 
 if __name__ == "__main__":
-    file = "test_dir/kanji_samples/0f9a8.svg"
+    file = "test_dir/kanji_samples/02ea8.svg"
     # get X_target from png image
     X_target_img = prepImage(file, flag = 1)
     # get current_xy
-    stroke = 1 # nth stroke
+    stroke = 2 # nth stroke
     global_model_predict = pseudoGlobalModelGenerator(file)
     for i in range(stroke):
         current_xy = next(global_model_predict)
-    connected_points = simpleSearch(current_xy, X_target_img, X_target_img.shape[0])[1:] # remove first point from prediction
+    connected_points = simpleSearch(current_xy, X_target_img, X_target_img.shape[0])[:] # remove first point from prediction
     # prepare input to local model, env_img, diff_img, con_img, ext (current_xy)
     env_img = np.zeros((HEIGHT, WIDTH))
     diff_img = X_target_img
