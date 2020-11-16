@@ -27,7 +27,6 @@ path.append(local_gen_path)
 
 # import local stroke generator
 from local_strokegenerator import strokeGenerator
-from test_local_model import prepInput
 
 # global variables
 counter = 0
@@ -75,7 +74,7 @@ local_model = getLocalModel()
 
 # get generator that generates samples for local model
 _, _, filelist = next(walk(kanjivg_samples_path))
-filelist = ["0f9b4.svg"] # get 200 samples from last
+filelist = ["0f9a8.svg"] # get 200 samples from last
 sg = strokeGenerator(filelist)
 
 while True: # till samples exhaust
