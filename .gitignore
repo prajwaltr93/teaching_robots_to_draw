@@ -1,5 +1,6 @@
 .ipynb_checkpoints/
 test_dir/
+weights/
 saved_model_weights/
 .gitignore
 __pycache__/
