@@ -102,7 +102,7 @@ def getLocalModel():
     #fully connected layer 3
     x3 = Dense(25, activation='softmax', name = 'out_cropped')(x1)
     # x3 = tf.reshape(x3, (5,5)) #output a 5 * 5 image
-    model = Model(inputs= [inp, ext_inp], outputs= [x2,x3])
+    model = Model(inputs= [inp, ext_inp], outputs= [x2, x3])
 
     # initialize with trained weights
     model.load_weights(weights_path)
