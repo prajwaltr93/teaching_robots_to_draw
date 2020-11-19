@@ -1,77 +1,107 @@
-from local_model import getLocalModel
+# imports
+import matplotlib.pyplot as plt
 import numpy as np
+from sys import path
 import cv2 as cv
 from skimage.morphology import skeletonize
-import matplotlib.pyplot as plt
-import copy as cp
-from simple_search import simpleSearch
 
-# Constants and magic numbers
-crop_hw = 5
+# user-defined module imports
+# from local_model import getLocalModel
+from global_model import getGlobalModel
+kanjivg_modules_path = "../kanjivg_dataset/"
+path.append(kanjivg_modules_path)
+from drawing_utils import HEIGHT, WIDTH
 
-# helper functions
-def get2DCordinates(index):
-    return (index//crop_hw, index%crop_hw) # returns plt cordinates x,y
+# constants
+X_target_file = "test_dir/kanji_samples/0ff11.svg"
+fig, main_axs = plt.subplots(1, 3) # 0->X_target, 1->X_diff, 2-> another two subplots for local and global prediction
+_, sec_axs = main_axs.subplots(2, 1) # stack vertically
+# create two more subplots on axs 2 of main plt
+sec_axs[0].set_title("Global Model prediction")
+sec_axs[0].text(0.5, 0.5, "None")
+sec_axs[1].set_title("Local Model prediction")
+sec_axs[1].text(0.5, 0.5, "None")
+# counter to track steps for saving plotter figures
+counter = 0
 
-def getNextCordinates(current_xy, next_xy):
-    delta = [next_xy[0] - 1, next_xy[1] - 1]
-    return [current_xy[0] + delta[0], current_xy[1] + delta[1]]
+g_line = "G %d %d"
+l_line = "L %d %d"
 
-def prepInput(inpts):
-    return [np.expand_dims(np.dstack((inpts[0], inpts[1], inpts[2])), axis=0), np.expand_dims(np.array(list(inpts[3][::-1]) + [0]), axis=0)] # [x1, x2]
+# utility functions
+def prepImage(file):
+    '''
+        get .png image, if svg file specified then convert image to ong and apply skeletonization
+    '''
+    from os import path
 
-if __name__ == "__main__":
-    # test local working of local model
-    thresh = cv.THRESH_BINARY_INV
-    img = cv.imread('./res/japanese.png') # 2 - RBG -> GRAYSCALE
+    img = np.zeros((HEIGHT, WIDTH))
+    if not path.isfile(file.split(".")[0] + ".png"):
+        # given svg file, get a png file
+        print("INFO : TARGET PNG IMAGE NOT FOUND, CREATING ...")
+        from svglib.svglib import svg2rlg
+        drawing = svg2rlg(file)
+        from reportlab.graphics import renderPM
+        renderPM.drawToFile(drawing, file.split(".")[0] + ".png", fmt="PNG")
+
+    img = cv.imread(file.split(".")[0] + ".png", 0) # get GRAYSCALE image
     img = cv.resize(img, (100, 100), cv.INTER_CUBIC)
-    # blur image to reduce noise
-    img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-    _,img = cv.threshold(img, 160, 255, thresh)
-    img[np.where(img > 0)] = 1
-    img = skeletonize(img, method='lee')
-    plt.imshow(img, cmap = "Greys_r")
-    plt.show()
-    start = (44, 11) # this is given global model during run time
-    connected_points = simpleSearch(list(start), img, img.shape[0])
-    local_model_weights_path = "./weights/local_model_weights"
-    # test local working of local model
-    local_model = getLocalModel()
-    env_img = np.zeros((100, 100))
-    con_img = cp.deepcopy(img)
-    diff_img = cp.deepcopy(con_img)
-    print(connected_points)
-    def local_model_predict(current_xy, env_img, diff_img, con_img):
-        _, axs = plt.subplots(1, 6)
-        axs[0].imshow(env_img, cmap="Greys_r")
-        axs[1].imshow(diff_img, cmap="Greys_r")
-        axs[2].imshow(con_img, cmap="Greys_r")
-        axs[3].axis('off')
-        axs[3].text(0.0, 0.5, repr(list(current_xy)))
-        axs[4].axis('off')
-        axs[0].set_title("env_img")
-        axs[1].set_title("diff_img")
-        axs[2].set_title("con_img")
-        axs[3].set_title("ext vector")
-        axs[4].set_title("touch")
-        axs[5].set_title("cropped_img")
-        touch, next_xy_grid = local_model.predict(prepInput([env_img, diff_img, con_img, current_xy]))
-        axs[5].imshow(np.reshape(next_xy_grid, (5,5)), cmap = "Greys_r")
-        axs[4].text(0.0, 0.5, repr(list(touch)))
-        plt.show()
-        if touch > 0.3:
-            # get 2d cordinates of 1d array
-            next_xy = get2DCordinates(np.argmax(next_xy_grid))
-            next_xy = getNextCordinates(current_xy, next_xy)
-            if next_xy in connected_points:
-                print('hurray')
-                stroke = connected_points[0 : connected_points.index(next_xy)+1]
-                for ind in range(len(stroke) - 1):
-                    cv.line(env_img,tuple(stroke[ind]), tuple(stroke[ind+1]), 1, 1, cv.LINE_AA) # write
-                    cv.line(diff_img,tuple(stroke[ind]), tuple(stroke[ind+1]), 0, 1, cv.LINE_AA) # erase
-                local_model_predict(next_xy, env_img, diff_img, con_img)
-            else:
-                print(next_xy)
-                print("point not found")
-                
-    local_model_predict(start, env_img, diff_img, con_img)
+    # TODO : apply blur ex : medianBlur(img, 5)
+    # load generated image and apply image transformations
+    thresh = cv.THRESH_BINARY_INV
+    _, img = cv.threshold(img, 0, 255, thresh + cv.THRESH_OTSU) # use otsu to find appropriate threshold
+    img[np.where(img > 0)] = 1 # convert to image with 0's and 1's ex : binary image
+    img = skeletonize(img, method="lee") # convert width of stroke to one pixel wide
+
+    return img
+
+def prepGlobalInput(X_env, X_diff, X_last, X_loc):
+    '''
+        make input compatible by expanding dimensions along axis = 0
+    '''
+    return np.expand_dims(np.dstack((X_loc, X_env, X_last, X_diff)), axis=0)
+
+def updateStepCanvas(X_diff, g_predict=None, l_predict=None):
+    '''
+        update main_axs plt with actions predicted both global and local model
+    '''
+    global main_axs, sec_axs, counter
+    main_axs.axs[1].imhow(X_diff, cmap="Greys_r") # udpate X_diff
+    if g_predict:
+        sec_axs[0].text(0.5, 0.5, repr(g_predict))
+    if l_predict:
+        sec_axs[1].text(0.5, 0.5, repr(l_predict))
+    # save plotted figure
+    plt.savefig("step : " + count.__str__() + ".png")
+    counter += 1
+
+# main functions
+def globalModelPredict(X_env, X_diff, X_last, X_loc):
+    '''
+        predict global actions and pass predicted x,y as current_xy to local model
+    '''
+    next_xy = global_model.predict(prepGlobalInput(X_env, X_diff, X_last, X_loc))
+    updateStepCanvas(X_diff, g_predict=next_xy, l_predict=None) # update step made by global model
+    print(next_xy)
+    exit(0)
+    # prep input to local model
+    # connected_points = simple_search(next)
+def enterSimulation(X_target):
+    '''
+        start simulation of drawing X_target
+    '''
+    global main_axs
+    # prepare all input to global model ->  X_loc, X_env, X_diff, X_last
+    X_diff = cp.deepcopy(X_target)
+    X_env = np.zeros((HEIGHT, WIDTH))
+    X_last = np.zeros((HEIGHT, WIDTH))
+    X_loc = np.zeros((HEIGHT, WIDTH))
+    # update canvas state
+    main_axs[0].imshow(X_target, cmap="Greys_r") # X_target
+    globalModelPredict(X_env, X_diff, X_last, X_loc)
+
+# start control from here
+if __name__ == "__main__":
+    # get image X_target
+    X_target = prepImage(file=X_target_file)
+    # enter controlled simulation
+    enterSimulation(X_target=X_target)
