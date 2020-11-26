@@ -12,10 +12,11 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import Flatten
 from tensorflow.keras.layers import MaxPooling2D
 from tensorflow.keras.layers import add
+from tensorflow.keras.layers import BatchNormalization
 
 # constants
 inp_img_dim = [100, 100, 4]
-target_img_dimg = 10000 # 100 * 100 flattened
+target_img_dim = 10000 # 100 * 100 flattened
 global_weights_path = "./weights/global_model_weights/"
 
 # 4 residual blocks
@@ -86,6 +87,6 @@ def getGlobalModel():
     # create model
     model = Model(inputs=inp, outputs=out)
     # load pre-trained model weights
-    model.load_weights(global_weights_path + "global_model_weights")
+    model.load_weights(global_weights_path + "global_model_weights_overfit")
 
     return model # return fully trained model
