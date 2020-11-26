@@ -26,7 +26,7 @@ local_model = getLocalModel()
 # thresh value to flip pixels
 thresh_val = 137
 # touch thresh to change control between local and global model
-touch_thresh = 0.3
+touch_thresh = 1e-5
 # variable to keep track of steps
 counter = 0
 local_step_plt_path = "./test_dir/local_steps/"
@@ -88,6 +88,7 @@ def prepImage(file, flag):
         thresh = cv.THRESH_BINARY_INV
         # img = cv.imread('./res/japanese.png') # 2 - RBG -> GRAYSCALE
         img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+        img = cv.medianBlur(img, 5)
         _, img = cv.threshold(img, thresh_val, 255, thresh)
         img[np.where(img > 0)] = 1 # convert to image with 0's and 1's ex : binary image
         img = skeletonize(img, method="lee") # convert width of stroke to one pixel wide
@@ -98,8 +99,9 @@ def prepImage(file, flag):
         img = drawStroke(X_target)
 
     return img
-def prepInput(inpts):
-    # make inputs suitable to be taken as input to model
+
+def prepLocalInput(inpts):
+    # make inputs suitable to be taken as input to local model
     return [np.expand_dims(np.dstack((inpts[0], inpts[1], inpts[2])), axis=0), np.expand_dims(inpts[3], axis=0)] # [x1, x2]
 
 def updateCanvas(env_img, diff_img, con_img, next_xy_grid):
@@ -121,16 +123,24 @@ def updateCanvas(env_img, diff_img, con_img, next_xy_grid):
     plt.close()
     counter += 1
 
+def checkPrediction(next_xy, connected_points):
+    '''
+        check if local model predicted correctly based on some logic
+    '''
+    if next_xy in connected_points:
+        # TODO: UPDATE LOGIC FOR CHECKING LOCAL MODEL PREDICTION
+        return True
+    else False
 def local_model_predict(slice_begin, connected_points, env_img, diff_img, con_img):
-    touch_pred, next_xy_pred = local_model.predict(prepInput([env_img, diff_img, con_img, slice_begin]))
+    touch_pred, next_xy_pred = local_model.predict(prepLocalInput([env_img, diff_img, con_img, slice_begin]))
     updateCanvas(env_img, diff_img, con_img, next_xy_pred)
     print(touch_pred)
-    if touch_pred[0] >= touch_thresh:
-        if len(connected_points) == 0:
-            return
+    print(np.argmax(next_xy_pred))
+    if (touch_pred[0] >= touch_thresh) or np.argmax(next_xy_pred) != 12 :
+
         next_xy = get2DCordinates(np.argmax(next_xy_pred))
         next_xy = getNextCordinates(slice_begin, next_xy)
-        if list(next_xy) in connected_points:
+        if checkPrediction(next_xy, connected_points):
             print('SUCCESS : POINT PREDICTED')
             print("INFO : PREDICTION MADE : ", next_xy)
         else:
@@ -151,12 +161,12 @@ def local_model_predict(slice_begin, connected_points, env_img, diff_img, con_im
             diff_img[point[1], point[0]] = 0 # erase
 
         # update remaining connected points
-        connected_points = connected_points[connected_points.index(list(next_xy)) + 1 : ]
+        connected_points = connected_points[connected_points.index(list(next_xy)) + 1 :] # exclusive of current point
         slice_begin = getSliceWindow(next_xy)
         local_model_predict(slice_begin, connected_points, env_img, diff_img, con_img)
 
 if __name__ == "__main__":
-    file = "test_dir/kanji_samples/02ea8.svg"
+    file = "test_dir/kanji_samples/02ecc.svg"
     # get X_target from png image
     X_target_img = prepImage(file, flag = 1)
     # get current_xy
