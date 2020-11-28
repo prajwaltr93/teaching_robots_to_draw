@@ -42,7 +42,7 @@ def getNextCordinates(slice_begin, next_xy):
     # convert to actual cordinates
     current_xy = [slice_begin[1] + 2, slice_begin[0] + 2]
     delta = [next_xy[0] - 2, next_xy[1] - 2]
-    return (current_xy[0] + delta[0], current_xy[1] + delta[1]) # actual next_xy
+    return [current_xy[0] + delta[0], current_xy[1] + delta[1]] # actual next_xy
 
 def pseudoGlobalModelGenerator(character_file):
     '''
@@ -127,41 +127,36 @@ def checkPrediction(next_xy, connected_points):
     '''
         check if local model predicted correctly based on some logic
     '''
-    if next_xy in connected_points:
-        # TODO: UPDATE LOGIC FOR CHECKING LOCAL MODEL PREDICTION
+    if next_xy in connected_points[1:3]: # check within two points of connected_points
         return True
-    else False
+    else: # correct prediction, modify next_xy
+        print("INFO : PREDICTION MADE : ", next_xy)
+        next_xy[0], next_xy[1] = connected_points[1][0], connected_points[1][1] # choose next immediate point
+        return False
+
 def local_model_predict(slice_begin, connected_points, env_img, diff_img, con_img):
+    '''
+        recursive function to predict local actions
+    '''
     touch_pred, next_xy_pred = local_model.predict(prepLocalInput([env_img, diff_img, con_img, slice_begin]))
     updateCanvas(env_img, diff_img, con_img, next_xy_pred)
-    print(touch_pred)
-    print(np.argmax(next_xy_pred))
-    if (touch_pred[0] >= touch_thresh) or np.argmax(next_xy_pred) != 12 :
-
+    if (touch_pred[0] >= touch_thresh) or np.argmax(next_xy_pred) != 12 : # for touch < touch thresh, next_xy_pred = 12 or (2,2) in 2D matrix
         next_xy = get2DCordinates(np.argmax(next_xy_pred))
         next_xy = getNextCordinates(slice_begin, next_xy)
         if checkPrediction(next_xy, connected_points):
-            print('SUCCESS : POINT PREDICTED')
-            print("INFO : PREDICTION MADE : ", next_xy)
+            print('SUCCESS : POINT PREDICTED', next_xy)
         else:
             # local model prediction failed, use a point from connected points to help
-            print("FAILED : POINT PREDICTED")
-            print("INFO : PREDICTION MADE : ", next_xy)
+            print("INFO : PREDICTION CORRECTED : ", next_xy)
             # choose next point in connected_points
-            try:
-                # help local model for next_xy
-                next_xy = connected_points[1]
-            except:
-                next_xy = connected_points[0]
-
         # update input variables to local model
-        stroke = connected_points[0 : connected_points.index(list(next_xy))+1]
+        stroke = connected_points[0 : connected_points.index(next_xy) + 1]
         for point in stroke:
             env_img[point[1], point[0]] = 1 # write
             diff_img[point[1], point[0]] = 0 # erase
 
         # update remaining connected points
-        connected_points = connected_points[connected_points.index(list(next_xy)) + 1 :] # exclusive of current point
+        connected_points = connected_points[connected_points.index(next_xy) :] # inclusive of current point
         slice_begin = getSliceWindow(next_xy)
         local_model_predict(slice_begin, connected_points, env_img, diff_img, con_img)
 
