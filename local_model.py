@@ -13,7 +13,7 @@ import tensorflow as tf
 tf.compat.v1.disable_eager_execution()
 tf.compat.v1.experimental.output_all_intermediates(True)
 
-weights_path = "./weights/local_model_weights/local_model_trained_2"
+weights_path = "./weights/local_model_weights/local_model_trained_17mil"
 inp_img_dim = [100, 100, 3]
 inp_ext_dim = [3]
 
