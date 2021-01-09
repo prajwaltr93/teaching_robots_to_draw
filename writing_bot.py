@@ -1,33 +1,40 @@
+#filename : writing_bot.py
+#author : PRAJWAL T R
+#date last modified : Sat Jan  9 23:44:40 2021
+#comments :
+
 # imports
-import matplotlib.pyplot as plt
 import numpy as np
-from sys import path
+import copy as cp
 import cv2 as cv
+from sys import path
 from skimage.morphology import skeletonize
+import matplotlib.pyplot as plt
 
 # user-defined module imports
-# from local_model import getLocalModel
+from local_model import getLocalModel
 from global_model import getGlobalModel
 kanjivg_modules_path = "../kanjivg_dataset/"
 path.append(kanjivg_modules_path)
-from drawing_utils import HEIGHT, WIDTH
+from drawing_utils import HEIGHT, WIDTH, highlightPoints
+from simple_search import simpleSearch
 
-# constants
-X_target_file = "test_dir/kanji_samples/0ff11.svg"
-fig, main_axs = plt.subplots(1, 3) # 0->X_target, 1->X_diff, 2-> another two subplots for local and global prediction
-_, sec_axs = main_axs.subplots(2, 1) # stack vertically
-# create two more subplots on axs 2 of main plt
-sec_axs[0].set_title("Global Model prediction")
-sec_axs[0].text(0.5, 0.5, "None")
-sec_axs[1].set_title("Local Model prediction")
-sec_axs[1].text(0.5, 0.5, "None")
-# counter to track steps for saving plotter figures
+# variable to keep track of steps
 counter = 0
+local_step_plt_path = "./test_dir/sim_steps/"
+# define global and local model with trained weights loaded
+global_model = getGlobalModel()
+local_model =  getLocalModel()
 
+# line formats for local and global model prediction printing
 g_line = "G %d %d"
 l_line = "L %d %d"
+# touch thresh to change control between local and global model
+touch_thresh = 1e-5
 
-# utility functions
+# file to work with
+X_target_file = "test_dir/kanji_samples/02ecc.svg"
+
 def prepImage(file):
     '''
         get .png image, if svg file specified then convert image to ong and apply skeletonization
@@ -54,49 +61,141 @@ def prepImage(file):
 
     return img
 
+def updateCanvas(env_img, diff_img, con_img, next_xy_grid):
+    '''
+        save each instances/steps taken by local model in plots
+    '''
+    global counter
+    _, axs = plt.subplots(1, 4)
+    axs[0].imshow(env_img, cmap="Greys_r")
+    axs[1].imshow(diff_img, cmap="Greys_r")
+    axs[2].imshow(con_img, cmap="Greys_r")
+    axs[3].imshow(np.reshape(next_xy_grid, (5, 5)), cmap="Greys_r")
+    # update legend
+    axs[0].set_title("env_img")
+    axs[1].set_title("diff_img")
+    axs[2].set_title("con_img")
+    axs[3].set_title("next_xy pred")
+    plt.savefig(local_step_plt_path + "local step : " + counter.__str__() + ".png")
+    plt.close()
+    counter += 1
+
+def getSliceWindow(current_xy):
+    '''
+        generate two variables begin and size for dynamice tensor slicing using tf.slice
+    '''
+    x, y = current_xy[0], current_xy[1]
+    begin = [y - 2, x - 2 , 0] # zero slice begin channel dimension
+    return np.array(begin)
+
+def _getSliceWindow(slice_begin):
+    '''
+        revert slice window transform
+    '''
+    x, y = slice_begin[0], slice_begin[1]
+    restore = [y + 2, x + 2] # restore transformed cordinates
+    return np.array(restore)
+
+def get2DCordinatesGlobal(index):
+    '''
+        convert index of flattened array to index of 2d array ex : 100 * 100 image
+    '''
+    return (index%HEIGHT, index//WIDTH)
+
+def get2DCordinatesLocal(index):
+    # width and height of cropped image
+    crop_hw = 5
+    # returns plt cordinates x, y from col, row ex: x --> row  and y --> col
+    return (index%crop_hw, index//crop_hw)
+
+def getNextCordinates(slice_begin, next_xy):
+    # convert to actual cordinates
+    current_xy = [slice_begin[1] + 2, slice_begin[0] + 2]
+    delta = [next_xy[0] - 2, next_xy[1] - 2]
+    return [current_xy[0] + delta[0], current_xy[1] + delta[1]] # actual next_xy
+
 def prepGlobalInput(X_env, X_diff, X_last, X_loc):
     '''
         make input compatible by expanding dimensions along axis = 0
     '''
     return np.expand_dims(np.dstack((X_loc, X_env, X_last, X_diff)), axis=0)
 
-def updateStepCanvas(X_diff, g_predict=None, l_predict=None):
-    '''
-        update main_axs plt with actions predicted both global and local model
-    '''
-    global main_axs, sec_axs, counter
-    main_axs.axs[1].imhow(X_diff, cmap="Greys_r") # udpate X_diff
-    if g_predict:
-        sec_axs[0].text(0.5, 0.5, repr(g_predict))
-    if l_predict:
-        sec_axs[1].text(0.5, 0.5, repr(l_predict))
-    # save plotted figure
-    plt.savefig("step : " + count.__str__() + ".png")
-    counter += 1
+def prepLocalInput(inpts):
+    # make inputs suitable to be taken as input to local model
+    return [np.expand_dims(np.dstack((inpts[0], inpts[1], inpts[2])), axis=0), np.expand_dims(inpts[3], axis=0)] # [x1, x2]
 
-# main functions
+def checkPrediction(next_xy, connected_points):
+    '''
+        check if local model predicted correctly based on some logic
+    '''
+    if next_xy in connected_points[1:3]: # check within two points of connected_points
+        return True
+    else: # correct prediction, modify next_xy
+        print("INFO : PREDICTION MADE : ", next_xy)
+        next_xy[0], next_xy[1] = connected_points[1][0], connected_points[1][1] # choose next immediate point
+        return False
+
+def local_model_predict(slice_begin, connected_points, env_img, diff_img, con_img):
+    '''
+        recursive function to predict local actions
+    '''
+    touch_pred, next_xy_pred = local_model.predict(prepLocalInput([env_img, diff_img, con_img, slice_begin]))
+    updateCanvas(env_img, diff_img, con_img, next_xy_pred)
+    if (touch_pred[0] >= touch_thresh) or np.argmax(next_xy_pred) != 12 : # for touch < touch thresh, next_xy_pred = 12 or (2,2) in 2D matrix
+        next_xy = get2DCordinatesLocal(np.argmax(next_xy_pred))
+        next_xy = getNextCordinates(slice_begin, next_xy)
+        if checkPrediction(next_xy, connected_points):
+            print(l_line % tuple(next_xy))
+        else:
+            # local model prediction failed, use a point from connected points to help
+            print("INFO : PREDICTION CORRECTED : ", next_xy)
+            # choose next point in connected_points
+        # update input variables to local model
+        stroke = connected_points[0 : connected_points.index(next_xy) + 1]
+        for point in stroke:
+            env_img[point[1], point[0]] = 1 # write
+            diff_img[point[1], point[0]] = 0 # erase
+
+        # update remaining connected points
+        connected_points = connected_points[connected_points.index(next_xy) :] # inclusive of current point
+        slice_begin = getSliceWindow(next_xy)
+        return (local_model_predict(slice_begin, connected_points, env_img, diff_img, con_img))
+    return _getSliceWindow(slice_begin)
+
 def globalModelPredict(X_env, X_diff, X_last, X_loc):
     '''
         predict global actions and pass predicted x,y as current_xy to local model
     '''
     next_xy = global_model.predict(prepGlobalInput(X_env, X_diff, X_last, X_loc))
-    updateStepCanvas(X_diff, g_predict=next_xy, l_predict=None) # update step made by global model
-    print(next_xy)
-    exit(0)
+    next_xy = get2DCordinatesGlobal(np.argmax(next_xy[0]))
+    print(g_line % next_xy)
+    connected_points = simpleSearch(start=next_xy, img=X_diff, size=HEIGHT)
+    if len(connected_points) == 0:
+        print("ERROR : GLOBAL MODEL MADE FALSE PREDICTION")
+        return
+    if (len(connected_points) == 1):
+        # TODO : FIX BUG CREATING NOISE IN CON_IMAGE
+        return
+        
     # prep input to local model
-    # connected_points = simple_search(next)
+    X_con = highlightPoints(connected_points)
+    next_xy = getSliceWindow(next_xy)
+    X_cord = local_model_predict(next_xy, connected_points, X_env, X_diff, X_con)
+    X_loc = np.zeros((HEIGHT, WIDTH))
+    X_loc[X_cord[1], X_cord[0]] = 1
+    globalModelPredict(X_env, X_diff, X_con, X_loc)
+    # TODO : call global model predict again
+
 def enterSimulation(X_target):
     '''
         start simulation of drawing X_target
     '''
-    global main_axs
     # prepare all input to global model ->  X_loc, X_env, X_diff, X_last
     X_diff = cp.deepcopy(X_target)
     X_env = np.zeros((HEIGHT, WIDTH))
     X_last = np.zeros((HEIGHT, WIDTH))
     X_loc = np.zeros((HEIGHT, WIDTH))
     # update canvas state
-    main_axs[0].imshow(X_target, cmap="Greys_r") # X_target
     globalModelPredict(X_env, X_diff, X_last, X_loc)
 
 # start control from here
