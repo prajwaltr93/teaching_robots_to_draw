@@ -4,3 +4,4 @@ weights/
 saved_model_weights/
 .gitignore
 __pycache__/
+weights/local_weights/*
