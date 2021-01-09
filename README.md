@@ -27,13 +27,13 @@ classes are heavily skewed, so accuracy might not be the best metric to analyse 
 
 except for class 2 and 13, every other class seems to be generalising well.
 
-### local model in action !
+### Writing Bot is up and Running !!
 
-![local model in action](./res/local_model_inaction.gif)
+![local model in action](./res/sim_plot.gif)
 
 ## Global Model
 
-yet to train
+yet to re-train
 
 ## Datasets
 
@@ -65,6 +65,14 @@ derprecated dataset:
 
 29/10/2020
 
-- [ ] train global model
+- [x] train global model
 
 - [ ] add legend to training local plot
+
+08/01/2021
+
+- [ ] retrain global and local model with more samples for robustness
+
+- [ ] test writing bot on real world handwritten image
+
+- [ ] add global model architecture diagram

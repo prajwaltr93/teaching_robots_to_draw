@@ -2,6 +2,9 @@
 #author : PRAJWAL T R
 #date last modified : Sat Jan  9 23:44:40 2021
 #comments :
+'''
+    Implement full global and local model control cycle for reproducing written image, save intermediataries in plots
+'''
 
 # imports
 import numpy as np
@@ -176,7 +179,7 @@ def globalModelPredict(X_env, X_diff, X_last, X_loc):
     if (len(connected_points) == 1):
         # TODO : FIX BUG CREATING NOISE IN CON_IMAGE
         return
-        
+
     # prep input to local model
     X_con = highlightPoints(connected_points)
     next_xy = getSliceWindow(next_xy)
