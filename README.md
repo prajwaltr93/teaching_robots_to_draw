@@ -33,7 +33,9 @@ except for class 2 and 13, every other class seems to be generalising well.
 
 ## Global Model
 
-yet to re-train
+Global Model architecture
+
+![global model architecture](./res/global_model_architecture.png)
 
 ## Datasets
 

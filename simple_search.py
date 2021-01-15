@@ -45,12 +45,19 @@ def findAdjacent(current_xy, img, threshold):
     return neighbourers
 
 def simpleSearch(start, img, size):
+
+    connected_points = []
+
+    # check if start cordinate is false start
+    if(img[start[1]][start[0]] == 0):
+        # no possible connected stroke can be found
+        connected_points.append(list(start))
+        return connected_points
+
     # prepare visited structure
     for i in range(size):
         for j in range(size):
             visited[[i, j].__repr__()] = UNVISITED
-
-    connected_points = []
 
     visited[list(start).__repr__()] = PROCESSING
     stack.append(list(start))
