@@ -92,13 +92,15 @@ if __name__ == "__main__":
     _, img = cv.threshold(img, thresh_val, 255, thresh)
     img[np.where(img > 0)] = 1
     img = skeletonize(img, method='lee')
-    plt.imshow(img, cmap = "Greys_r")
-    plt.show()
-    start = (45, 9) # this is given by global model during run time
+    # plt.imshow(img, cmap = "Greys_r")
+    plt.savefig("./test_dir/image.png")
+    plt.close()
+    start = (10, 47) # this is given by global model during run time
     points = simpleSearch(list(start), img, img.shape[0])
     draw_img = np.zeros(img.shape)
     # mark points obtained by search algorithm, which are connected
     for point in points:
         draw_img[point[1], point[0]] = 1
-    cv.imshow('continously connected stroke', draw_img)
-    cv.waitKey(0)
+    # plt.imshow(draw_img, cmap = "Greys_r")
+    plt.savefig("./test_dir/connected.png")
+    plt.close()
