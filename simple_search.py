@@ -76,31 +76,92 @@ def simpleSearch(start, img, size):
     # search complete
     return connected_points
 
+def driver_code(start_xy, end_xy, img):
+    connected_points = []
+    # prepare visited structure
+    visited = {}
+    size = img.shape[0]
+    for i in range(size):
+        for j in range(size):
+            visited[[i, j].__repr__()] = UNVISITED
+
+    visited[list(start_xy).__repr__()] = VISITED
+    connected_points.append(list(start_xy))
+    found = False
+    def findShortestPath(start_xy, end_xy, img): # default mutable argument, persistent accross calls
+        adjs = findAdjacent(start_xy, img, 0)
+        nonlocal found
+        for point in adjs:
+            if visited[list(point).__repr__()] == UNVISITED and not found:
+                if point == end_xy:
+                    connected_points.append(point)
+                    found = True
+                    return connected_points
+                else:
+                    connected_points.append(point)
+                    visited[list(start_xy).__repr__()] = PROCESSING
+                    findShortestPath(point, end_xy, img)
+                    # visited[list(start_xy).__repr__()] = UNVISITED
+                    if not found:
+                        connected_points.pop()
+        return connected_points
+    return findShortestPath(start_xy, end_xy, img)
 # test working of algorithm
 if __name__ == "__main__":
-    import cv2 as cv
-    from skimage.morphology import skeletonize
-    import matplotlib.pyplot as plt
-    file = "./test_dir/kanji_samples/0f9a8.png"
-    thresh_val = 127
-    thresh = cv.THRESH_BINARY_INV
-    img = cv.imread(file) # 2 - RBG -> GRAYSCALE
-    # img = cv.resize(img, (100, 100), cv.INTER_CUBIC)
-    # blur image to reduce noise
-    img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-    # img = cv.GaussianBlur(img,(3,3),0) # 1 * 1 kernel
-    _, img = cv.threshold(img, thresh_val, 255, thresh)
-    img[np.where(img > 0)] = 1
-    img = skeletonize(img, method='lee')
-    # plt.imshow(img, cmap = "Greys_r")
-    plt.savefig("./test_dir/image.png")
-    plt.close()
-    start = (10, 47) # this is given by global model during run time
-    points = simpleSearch(list(start), img, img.shape[0])
-    draw_img = np.zeros(img.shape)
-    # mark points obtained by search algorithm, which are connected
-    for point in points:
-        draw_img[point[1], point[0]] = 1
-    # plt.imshow(draw_img, cmap = "Greys_r")
-    plt.savefig("./test_dir/connected.png")
-    plt.close()
+    from sys import argv
+    if len(argv) > 1:
+        if argv[1] == 'f':
+            import cv2 as cv
+            from skimage.morphology import skeletonize
+            import matplotlib.pyplot as plt
+            file = "./test_dir/kanji_samples/x_stroke.jpg"
+            img = cv.imread(file, 0)
+            img = cv.resize(img, (100, 100), cv.INTER_CUBIC)
+            # TODO : apply blur ex : medianBlur(img, 5)
+            # load generated image and apply image transformations
+            thresh = cv.THRESH_BINARY_INV
+            _, img = cv.threshold(img, 0, 255, thresh + cv.THRESH_OTSU) # use otsu to find appropriate threshold
+            img[np.where(img > 0)] = 1 # convert to image with 0's and 1's ex : binary image
+            img = skeletonize(img, method="lee")
+            stop = [58, 56]
+            start = [99, 39]
+            points_ = simpleSearch(start, img, img.shape[0])
+            assert start in points_
+            assert stop in points_
+            assert [40, 38]
+            points = driver_code(start, stop, img)
+            print(points)
+            draw_img = np.zeros(img.shape)
+            # mark points obtained []by search algorithm, which are connected
+            for point in points:
+                draw_img[point[1], point[0]] = 1
+            # plt.imshow(draw_img, cmap = "Greys_r")
+            plt.imshow(draw_img)
+            plt.show()
+        else:
+            import cv2 as cv
+            from skimage.morphology import skeletonize
+            import matplotlib.pyplot as plt
+            file = "./test_dir/kanji_samples/0f9a8.png"
+            thresh_val = 127
+            thresh = cv.THRESH_BINARY_INV
+            img = cv.imread(file) # 2 - RBG -> GRAYSCALE
+            # img = cv.resize(img, (100, 100), cv.INTER_CUBIC)
+            # blur image to reduce noise
+            img = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+            # img = cv.GaussianBlur(img,(3,3),0) # 1 * 1 kernel
+            _, img = cv.threshold(img, thresh_val, 255, thresh)
+            img[np.where(img > 0)] = 1
+            img = skeletonize(img, method='lee')
+            # plt.imshow(img, cmap = "Greys_r")
+            plt.savefig("./test_dir/image.png")
+            plt.close()
+            start = (10, 47) # this is given by global model during run time
+            points = simpleSearch(list(start), img, img.shape[0])
+            draw_img = np.zeros(img.shape)
+            # mark points obtained by search algorithm, which are connected
+            for point in points:
+                draw_img[point[1], point[0]] = 1
+            # plt.imshow(draw_img, cmap = "Greys_r")
+            plt.savefig("./test_dir/connected.png")
+            plt.close()

@@ -20,7 +20,7 @@ from global_model import getGlobalModel
 kanjivg_modules_path = "../kanjivg_dataset/"
 path.append(kanjivg_modules_path)
 from drawing_utils import HEIGHT, WIDTH, highlightPoints
-from simple_search import simpleSearch
+from simple_search import simpleSearch, driver_code
 
 # variable to keep track of steps
 counter = 0
@@ -36,7 +36,7 @@ l_line = "L %d %d"
 touch_thresh = 1e-5
 
 # file to work with
-X_target_file = "test_dir/kanji_samples/02ecc.svg"
+X_target_file = "test_dir/kanji_samples/02ecc.png"
 
 def prepImage(file):
     '''
@@ -45,11 +45,11 @@ def prepImage(file):
     from os import path
 
     img = np.zeros((HEIGHT, WIDTH))
-    if not path.isfile(file.split(".")[0] + ".png"):
+    if path.isfile(file.split(".")[0] + ".svg"):
         # given svg file, get a png file
         print("INFO : TARGET PNG IMAGE NOT FOUND, CREATING ...")
         from svglib.svglib import svg2rlg
-        drawing = svg2rlg(file)
+        drawing = svg2rlg(file.split(".")[0] + ".svg")
         from reportlab.graphics import renderPM
         renderPM.drawToFile(drawing, file.split(".")[0] + ".png", fmt="PNG")
 
@@ -61,7 +61,8 @@ def prepImage(file):
     _, img = cv.threshold(img, 0, 255, thresh + cv.THRESH_OTSU) # use otsu to find appropriate threshold
     img[np.where(img > 0)] = 1 # convert to image with 0's and 1's ex : binary image
     img = skeletonize(img, method="lee") # convert width of stroke to one pixel wide
-
+    plt.imshow(img)
+    plt.show()
     return img
 
 def updateCanvas(env_img, diff_img, con_img, next_xy_grid):
@@ -135,34 +136,39 @@ def checkPrediction(next_xy, connected_points):
         return True
     else: # correct prediction, modify next_xy
         print("INFO : PREDICTION MADE : ", next_xy)
+        # side effect
         next_xy[0], next_xy[1] = connected_points[1][0], connected_points[1][1] # choose next immediate point
         return False
 
-def local_model_predict(slice_begin, connected_points, env_img, diff_img, con_img):
+def local_model_predict(slice_begin, connected_points, env_img, diff_img, con_img, start_xy):
     '''
         recursive function to predict local actions
     '''
     touch_pred, next_xy_pred = local_model.predict(prepLocalInput([env_img, diff_img, con_img, slice_begin]))
     updateCanvas(env_img, diff_img, con_img, next_xy_pred)
-    if (touch_pred[0] >= touch_thresh) or np.argmax(next_xy_pred) != 12 : # for touch < touch thresh, next_xy_pred = 12 or (2,2) in 2D matrix
+    if np.argmax(next_xy_pred) != 12 : # for touch < touch thresh, next_xy_pred = 12 or (2,2) in 2D matrix
         next_xy = get2DCordinatesLocal(np.argmax(next_xy_pred))
         next_xy = getNextCordinates(slice_begin, next_xy)
-        if checkPrediction(next_xy, connected_points):
-            print(l_line % tuple(next_xy))
-        else:
-            # local model prediction failed, use a point from connected points to help
-            print("INFO : PREDICTION CORRECTED : ", next_xy)
-            # choose next point in connected_points
-        # update input variables to local model
-        stroke = connected_points[0 : connected_points.index(next_xy) + 1]
+        # assume local model predicts accurately
+        # next_xy in connected_points
+        assert next_xy in connected_points
+        print(l_line % tuple(next_xy))
+        stroke = driver_code(start_xy, next_xy, con_img)
+        print(stroke)
         for point in stroke:
             env_img[point[1], point[0]] = 1 # write
             diff_img[point[1], point[0]] = 0 # erase
 
         # update remaining connected points
-        connected_points = connected_points[connected_points.index(next_xy) :] # inclusive of current point
+        # TODO : remove all point from stroke in connected_points except last
+        stroke = stroke[:-1] if len(stroke) > 1 else stroke
+        for point in stroke:
+            index_ = connected_points.index(point) # .remove ?
+            connected_points.pop(index_)
+        # connected_points = connected_points[connected_points.index(next_xy) :] # inclusive of current point
         slice_begin = getSliceWindow(next_xy)
-        return (local_model_predict(slice_begin, connected_points, env_img, diff_img, con_img))
+        start_xy = next_xy
+        return (local_model_predict(slice_begin, connected_points, env_img, diff_img, con_img, start_xy))
     return _getSliceWindow(slice_begin)
 
 def globalModelPredict(X_env, X_diff, X_last, X_loc):
@@ -178,12 +184,13 @@ def globalModelPredict(X_env, X_diff, X_last, X_loc):
         return
     if (len(connected_points) == 1):
         # TODO : FIX BUG CREATING NOISE IN CON_IMAGE
+        print("here")
         return
 
     # prep input to local model
     X_con = highlightPoints(connected_points)
-    next_xy = getSliceWindow(next_xy)
-    X_cord = local_model_predict(next_xy, connected_points, X_env, X_diff, X_con)
+    slice_begin = getSliceWindow(next_xy)
+    X_cord = local_model_predict(slice_begin, connected_points, X_env, X_diff, X_con, start_xy=next_xy)
     X_loc = np.zeros((HEIGHT, WIDTH))
     X_loc[X_cord[1], X_cord[0]] = 1
     globalModelPredict(X_env, X_diff, X_con, X_loc)
