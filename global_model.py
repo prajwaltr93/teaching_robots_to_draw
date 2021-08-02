@@ -17,7 +17,7 @@ from tensorflow.keras.layers import BatchNormalization
 # constants
 inp_img_dim = [100, 100, 4]
 target_img_dim = 10000 # 100 * 100 flattened
-global_weights_path = "./weights/global_model_weights/" + "global_model_weights_overfit"
+global_weights_path = "./weights/inter_model/variables/variables"
 
 # 4 residual blocks
 inp = Input(shape=(100, 100, 16))

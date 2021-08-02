@@ -20,7 +20,7 @@ from global_model import getGlobalModel
 kanjivg_modules_path = "../kanjivg_dataset/"
 path.append(kanjivg_modules_path)
 from drawing_utils import HEIGHT, WIDTH, highlightPoints
-from simple_search import simpleSearch, driver_code
+from simple_search import simpleSearch, driver_code, findAdjacent
 
 # variable to keep track of steps
 counter = 0
@@ -33,10 +33,7 @@ local_model =  getLocalModel()
 g_line = "G %d %d"
 l_line = "L %d %d"
 # touch thresh to change control between local and global model
-touch_thresh = 1e-5
-
-# file to work with
-X_target_file = "test_dir/kanji_samples/02ecc.png"
+touch_thresh = 1e-1
 
 def prepImage(file):
     '''
@@ -52,34 +49,44 @@ def prepImage(file):
         drawing = svg2rlg(file.split(".")[0] + ".svg")
         from reportlab.graphics import renderPM
         renderPM.drawToFile(drawing, file.split(".")[0] + ".png", fmt="PNG")
+        img = cv.imread(file.split(".")[0] + ".png", 0)
 
-    img = cv.imread(file.split(".")[0] + ".png", 0) # get GRAYSCALE image
+    elif path.isfile(file.split(".")[0] + ".png"):
+        img = cv.imread(file.split(".")[0] + ".png", 0) # get GRAYSCALE image
+    else:
+        img = cv.imread(file.split(".")[0] + ".jpg", 0)
+    print("[INFO] : IMAGE READ")
     img = cv.resize(img, (100, 100), cv.INTER_CUBIC)
     # TODO : apply blur ex : medianBlur(img, 5)
     # load generated image and apply image transformations
     thresh = cv.THRESH_BINARY_INV
-    _, img = cv.threshold(img, 0, 255, thresh + cv.THRESH_OTSU) # use otsu to find appropriate threshold
-    img[np.where(img > 0)] = 1 # convert to image with 0's and 1's ex : binary image
-    img = skeletonize(img, method="lee") # convert width of stroke to one pixel wide
-    plt.imshow(img)
+    _, img_ = cv.threshold(img, 0, 255, thresh + cv.THRESH_OTSU) # use otsu to find appropriate threshold
+    img_[np.where(img_ > 0)] = 1 # convert to image with 0's and 1's ex : binary image
+    print("[INFO] : APPLYING SKELETONIZATION")
+    img_ = skeletonize(img_, method="lee") # convert width of stroke to one pixel wide
+    _, axs = plt.subplots(1, 2)
+    axs[0].imshow(img, cmap="Greys_r")
+    axs[1].imshow(img_, cmap="Greys_r")
+    axs[0].set_title("Original Image")
+    axs[1].set_title("Processed Image")
     plt.show()
-    return img
+    return img_
 
 def updateCanvas(env_img, diff_img, con_img, next_xy_grid):
     '''
         save each instances/steps taken by local model in plots
     '''
     global counter
-    _, axs = plt.subplots(1, 4)
+    _, axs = plt.subplots(1, 3)
     axs[0].imshow(env_img, cmap="Greys_r")
     axs[1].imshow(diff_img, cmap="Greys_r")
     axs[2].imshow(con_img, cmap="Greys_r")
-    axs[3].imshow(np.reshape(next_xy_grid, (5, 5)), cmap="Greys_r")
+    # axs[3].imshow(np.reshape(next_xy_grid, (5, 5)), cmap="Greys_r")
     # update legend
     axs[0].set_title("env_img")
     axs[1].set_title("diff_img")
     axs[2].set_title("con_img")
-    axs[3].set_title("next_xy pred")
+    # axs[3].set_title("next_xy pred")
     plt.savefig(local_step_plt_path + "local step : " + counter.__str__() + ".png")
     plt.close()
     counter += 1
@@ -149,9 +156,11 @@ def local_model_predict(slice_begin, connected_points, env_img, diff_img, con_im
     if np.argmax(next_xy_pred) != 12 : # for touch < touch thresh, next_xy_pred = 12 or (2,2) in 2D matrix
         next_xy = get2DCordinatesLocal(np.argmax(next_xy_pred))
         next_xy = getNextCordinates(slice_begin, next_xy)
+        print(next_xy, touch_pred, connected_points, start_xy)
         # assume local model predicts accurately
         # next_xy in connected_points
-        assert next_xy in connected_points
+        if next_xy not in connected_points:
+            next_xy = connected_points[0]
         print(l_line % tuple(next_xy))
         stroke = driver_code(start_xy, next_xy, con_img)
         print(stroke)
@@ -163,8 +172,11 @@ def local_model_predict(slice_begin, connected_points, env_img, diff_img, con_im
         # TODO : remove all point from stroke in connected_points except last
         stroke = stroke[:-1] if len(stroke) > 1 else stroke
         for point in stroke:
-            index_ = connected_points.index(point) # .remove ?
-            connected_points.pop(index_)
+            try:
+                index_ = connected_points.index(point) # .remove ?
+                connected_points.pop(index_)
+            except:
+                pass
         # connected_points = connected_points[connected_points.index(next_xy) :] # inclusive of current point
         slice_begin = getSliceWindow(next_xy)
         start_xy = next_xy
@@ -184,7 +196,6 @@ def globalModelPredict(X_env, X_diff, X_last, X_loc):
         return
     if (len(connected_points) == 1):
         # TODO : FIX BUG CREATING NOISE IN CON_IMAGE
-        print("here")
         return
 
     # prep input to local model
@@ -198,7 +209,7 @@ def globalModelPredict(X_env, X_diff, X_last, X_loc):
 
 def enterSimulation(X_target):
     '''
-        start simulation of drawing X_target
+        diff_img start simulation of drawing X_target
     '''
     # prepare all input to global model ->  X_loc, X_env, X_diff, X_last
     X_diff = cp.deepcopy(X_target)
@@ -211,6 +222,31 @@ def enterSimulation(X_target):
 # start control from here
 if __name__ == "__main__":
     # get image X_target
-    X_target = prepImage(file=X_target_file)
-    # enter controlled simulation
-    enterSimulation(X_target=X_target)
+    samples_path = "test_dir/kanji_samples/"
+    from sys import argv
+    from os import path
+    if len(argv) == 2:
+        file = argv[1]
+        file = samples_path + file
+        if (path.isfile(file)):
+            X_target = prepImage(file=file)
+            # enter controlled simulation
+            enterSimulation(X_target=X_target)
+            # clean up sim steps
+            print("[INFO] : clean up sim steps ?(y/n)")
+            i = input()
+            if i.lower() == 'n':
+                pass
+            else:
+                from os import walk, remove
+                try:
+                    _, _, files = next(walk("./test_dir/sim_steps/"))
+                    print(f"[INFO] : removing {len(files)} simulation files")
+                    for file in files:
+                        remove("./test_dir/sim_steps/" + file)
+                except:
+                    print("[INFO] : no files found")
+        else:
+            print(f"[ERROR] : File {file} Does not Exist")
+    else:
+        print("[ERROR] : Enter file name")
