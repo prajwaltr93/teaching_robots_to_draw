@@ -77,16 +77,16 @@ def updateCanvas(env_img, diff_img, con_img, next_xy_grid):
         save each instances/steps taken by local model in plots
     '''
     global counter
-    _, axs = plt.subplots(1, 3)
+    _, axs = plt.subplots(1, 4)
     axs[0].imshow(env_img, cmap="Greys_r")
     axs[1].imshow(diff_img, cmap="Greys_r")
     axs[2].imshow(con_img, cmap="Greys_r")
-    # axs[3].imshow(np.reshape(next_xy_grid, (5, 5)), cmap="Greys_r")
+    axs[3].imshow(np.reshape(next_xy_grid, (5, 5)), cmap="Greys_r")
     # update legend
     axs[0].set_title("env_img")
     axs[1].set_title("diff_img")
     axs[2].set_title("con_img")
-    # axs[3].set_title("next_xy pred")
+    axs[3].set_title("next_xy pred")
     plt.savefig(local_step_plt_path + "local step : " + counter.__str__() + ".png")
     plt.close()
     counter += 1
@@ -156,14 +156,14 @@ def local_model_predict(slice_begin, connected_points, env_img, diff_img, con_im
     if np.argmax(next_xy_pred) != 12 : # for touch < touch thresh, next_xy_pred = 12 or (2,2) in 2D matrix
         next_xy = get2DCordinatesLocal(np.argmax(next_xy_pred))
         next_xy = getNextCordinates(slice_begin, next_xy)
-        print(next_xy, touch_pred, connected_points, start_xy)
+        # print(next_xy, touch_pred, connected_points, start_xy)
         # assume local model predicts accurately
         # next_xy in connected_points
         if next_xy not in connected_points:
             next_xy = connected_points[0]
         print(l_line % tuple(next_xy))
         stroke = driver_code(start_xy, next_xy, con_img)
-        print(stroke)
+        # print(stroke)
         for point in stroke:
             env_img[point[1], point[0]] = 1 # write
             diff_img[point[1], point[0]] = 0 # erase
